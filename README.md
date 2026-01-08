@@ -1,3 +1,6 @@
+
+<img width="1919" height="1079" alt="Screenshot 2026-01-08 124017" src="https://github.com/user-attachments/assets/2b43c88f-9325-4c74-a0f9-e580ffd5accf" />
+
 ## 🚀 Strategy for Future Improvements
 
 This section outlines a strategic roadmap to enhance the Knowledge-Grounded RAG Chatbot — focusing on quality, performance, scalability, and user trust. The goal is to evolve the system from a solid baseline into a robust, production-grade AI assistant that delivers highly accurate, efficient, and reliable responses grounded strictly in source documents.
