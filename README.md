@@ -88,21 +88,8 @@ Build logging and metrics for key indicators: retrieval accuracy, latency, cache
 
 Eventually, consider:
 
-* **Distributed vector storage** and retrieval for large corpora
 * **Session-aware multi-user support**
 * **Multilingual capabilities**
 * **Feedback-informed ranking**, where user corrections help refine results
-* **Hybrid on-device/local hosting options** for privacy-sensitive applications
 
----
-
-## 📌 Summary: What This Strategy Achieves
-
-| Goal                    | Expected Benefit                 |
-| ----------------------- | -------------------------------- |
-| More accurate retrieval | Higher answer relevance          |
-| Reduced hallucination   | Increased trust and safety       |
-| Faster responses        | Better user experience           |
-| Better context handling | More natural conversations       |
-| Scalable architecture   | Ready for real-world deployments |
 
