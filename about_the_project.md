@@ -1,4 +1,4 @@
-# PART 1: Codebase Walkthrough (Current Implementation)
+# Codebase Walkthrough (Current Implementation)
 
 ## Technical Overview
 
@@ -230,3 +230,4 @@ CREATE TABLE messages (
 4. **Dynamic Thresholding**: Adapts similarity requirements based on query characteristics
 5. **Graceful Degradation**: Falls back to "I Don't Know" on insufficient context
 6. **Source Attribution**: Every response includes source documents with page numbers
+
