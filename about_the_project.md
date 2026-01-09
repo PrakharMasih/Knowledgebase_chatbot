@@ -240,3 +240,7 @@ The system is now capable of:
 
 ---
 
+# Detailed DFD Startup Flow Diagram
+
+<img width="10340" height="12126" alt="startup_flow_expanded" src="https://github.com/user-attachments/assets/fd18d413-320d-4eb0-8afd-07dd9cdd7d5b" />
+
