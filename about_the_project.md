@@ -244,3 +244,9 @@ The system is now capable of:
 
 <img width="10340" height="12126" alt="startup_flow_expanded" src="https://github.com/user-attachments/assets/fd18d413-320d-4eb0-8afd-07dd9cdd7d5b" />
 
+---
+
+# Timeline Visualization
+
+<img width="4604" height="1201" alt="Timeline Visualization" src="https://github.com/user-attachments/assets/1baa6a9f-0cf1-4b21-9a1d-79becc267b6e" />
+
