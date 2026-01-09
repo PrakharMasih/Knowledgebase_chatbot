@@ -27,207 +27,216 @@ app/
 └── main.py                  # Application entry point
 ```
 
-### 2. **Data Ingestion & Document Processing**
+## App StartUp Flow
 
-**File: `document_processor.py`**
+<img width="1467" height="6764" alt="startup_flow" src="https://github.com/user-attachments/assets/de7197e0-c284-4d1f-9f45-661eb5b1b44e" />
 
-The system processes PDF documents through the following pipeline:
 
-1. **PDF Loading**: Uses `PyPDFLoader` from LangChain to extract text from PDFs in the `data/pdfs/` directory
-2. **Text Chunking**: Applies `RecursiveCharacterTextSplitter` with:
-   - Chunk size: 1000 characters
-   - Overlap: 200 characters
-   - Separators: `["\n\n", "\n", " ", ""]`
-3. **Enhanced Chunking**: Additional chunking strategies are available (paragraph, sentence, fixed) for better retrieval
-4. **Metadata Extraction**: Captures source filename, page number, and chunk index
-5. **Unique ID Generation**: Creates MD5 hash-based IDs for each chunk to prevent duplicates
+## 2. High-Level Architecture (Startup Phase)
 
-**Process Flow**:
-```
-PDF File → PyPDFLoader → Pages → RecursiveCharacterTextSplitter → Chunks → Vector Store
-```
+At server startup, the application performs the following high-level steps:
 
-### 3. **Embedding Generation & Storage**
+1. FastAPI application boots
+2. Vector database is initialized
+3. Relational database schema is created
+4. PDF documents are loaded from disk
+5. PDFs are chunked and embedded
+6. Embeddings are stored in the vector database
+7. Application enters ready state
 
-**Files: `embeddings.py`, `vector_store.py`**
+---
 
-**Embedding Generation**:
-- Uses **Sentence Transformers** model: `all-MiniLM-L6-v2`
-- Normalized embeddings for better similarity comparison
-- Runs on CPU with 384-dimensional vectors
+## 3. Entry Point: `main.py`
 
-**Vector Storage (ChromaDB)**:
-- **Persistent storage** at `vectordb/` directory
-- Collection name: `pdf_documents`
-- Distance metric: L2 (Euclidean distance)
-- Features:
-  - Document deduplication via chunk hashing
-  - Metadata storage (source, page, chunk_index)
-  - Sub-chunking strategy for improved granularity
+### 3.1 Application Lifecycle Management
 
-**Key Methods**:
-- `add_documents()`: Stores document chunks with embeddings
-- `query()`: Performs vector similarity search
-- `document_exists()`: Prevents duplicate ingestion
+The application uses **FastAPI’s `lifespan` context manager** to control startup and shutdown logic.
 
-### 4. **Retrieval Mechanism**
-
-**File: `chat_service.py`**
-
-The retrieval system implements a sophisticated multi-stage approach:
-
-#### **Stage 1: Query Analysis**
-- **Query Type Detection**: Identifies factual, definition, explanation, or comparison queries
-- **Complexity Assessment**: Categorizes as simple/medium/complex based on word count
-- **Follow-up Detection**: Checks if query references previous conversation context
-
-#### **Stage 2: Query Rewriting (Contextual)**
-When a follow-up query is detected:
-1. Retrieves last 6 conversation messages
-2. Uses Groq LLM to rewrite query as standalone
-3. Falls back to original if rewriting fails
-
-**Example**:
-```
-Previous: "What is machine learning?"
-Current: "How about deep learning?"
-Rewritten: "What is deep learning and how does it differ from machine learning?"
-```
-
-#### **Stage 3: Vector Search**
-- Queries ChromaDB with effective query (original or rewritten)
-- Retrieves top K results (default: 3)
-- Returns documents, metadata, and L2 distances
-
-#### **Stage 4: Similarity Filtering**
-Converts L2 distance to similarity score:
 ```python
-similarity = 1 / (1 + distance)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
 ```
 
-Filters by dynamic threshold:
-- Short queries (≤3 words): 0.7
-- Definition queries: 0.7
-- Factual queries: 0.8
-- Complex/explanation queries: 0.5
-- Default: 0.6
+This ensures:
 
-### 5. **Confidence Scoring**
+* Startup logic runs **once** when the server starts
+* Shared resources are stored in `app.state`
+* Graceful shutdown logging is possible
 
-**File: `chat_service.py` - `_calculate_confidence()`**
+---
 
-Implements a **weighted multi-factor confidence system**:
+### 3.2 Startup Responsibilities
 
-**Factors**:
-1. **Average Similarity**: Mean of all similarity scores
-2. **Best Score**: Highest similarity score
-3. **Consistency Score**: `1 / (1 + 10 * variance)` - measures score clustering
-4. **Document Count Score**: Normalized by ideal count (3 docs)
-5. **Clustering Score**: Measures middle-range spread
+#### Step 1: Vector Store Initialization
 
-**Weighted Formula** (varies by query type):
-- Factual queries: Prioritize avg_similarity (40%) and best_score (30%)
-- Definition queries: Balance consistency (25%) and avg_similarity (30%)
-- General: Balanced weights across all factors
-
-**Thresholds** (adjusted by complexity):
-- High confidence: ≥ 0.8
-- Medium confidence: ≥ 0.6
-- Low confidence: < 0.6
-
-### 6. **Prompting Strategy & Response Generation**
-
-**File: `chat_service.py` - `_generate_groq_answer()`**
-
-**LLM Configuration**:
-- Model: Groq API (model specified in settings)
-- Temperature: 0.1 (deterministic responses)
-- Max tokens: 512
-
-**System Prompt**:
-```
-You are a helpful assistant that answers questions based ONLY on the provided context.
-If conversation history is provided, use it to understand references and follow-up questions.
-If the context doesn't contain relevant information, respond with exactly 'I Don't Know'.
-Keep answers concise, accurate, and directly address the question.
+```python
+vector_store = EnhancedVectorStore()
+app.state.vector_store = vector_store
 ```
 
-**Prompt Template**:
-```
-Context:
-{retrieved_documents}
+* Initializes the vector database (ChromaDB internally)
+* Holds:
 
-Question: {user_query}
+  * Embedding function - **ChromaDB SentenceTransformerEmbeddingFunction function is used ( model - all-MiniLM-L6-v2 )**
+  * Persistent storage path (assumed)
+* Stored in `app.state` for global access across requests
 
-Answer:
-```
+---
 
-**Fallback Detection**:
-If LLM response contains phrases like "don't know", "cannot answer", "no information" → returns "I Don't Know"
+#### Step 2: Database Initialization
 
-### 7. **Chat Flow & Conversation History**
-
-**File: `chat_history.py`, `routes.py`**
-
-**Database Schema** (`models.py`):
-```sql
-CREATE TABLE messages (
-    id INTEGER PRIMARY KEY,
-    role VARCHAR NOT NULL,        -- 'user' or 'assistant'
-    content TEXT NOT NULL,
-    confidence VARCHAR,           -- 'high', 'medium', 'low'
-    sources TEXT,                 -- JSON string of sources
-    timestamp DATETIME DEFAULT NOW
-);
+```python
+await init_db()
 ```
 
-**Chat Flow** (per request):
-1. User sends query via POST `/api/v1/chat`
-2. Store user message in database
-3. Retrieve last 3 conversation turns (6 messages)
-4. Detect if follow-up query
-5. Rewrite query if needed
-6. Perform retrieval and generation
-7. Store assistant response with metadata
-8. Return response to user
+* Uses `aiosqlite` (async SQLAlchemy engine)
+* Creates tables defined in `Base.metadata`
+* Typically used for:
 
-**Conversation Context**:
-- Maintains last N turns in memory (default: 3 turns = 6 messages)
-- Used for query rewriting and reference resolution
-- Does NOT pass full history to LLM (only context string for rewriting)
+  * Message
 
-### 8. **API Design**
+---
 
-**File: `routes.py`**
+#### Step 3: Document Processor Initialization
 
-**Endpoints**:
+```python
+doc_processor = DocumentProcessor(vector_store)
+```
 
-1. **POST `/api/v1/chat`**
-   - Request: `{"query": "string"}`
-   - Response: `{"answer": "string", "sources": [...], "confidence": "high|medium|low"}`
+* Binds document ingestion directly to the vector store
+* Couples ingestion and embedding tightly 
 
-2. **GET `/api/v1/chat/history`**
-   - Query param: `limit` (default: 50)
-   - Returns: List of messages with metadata
+---
 
-3. **DELETE `/api/v1/chat`**
-   - Clears all conversation history
+#### Step 4: PDF Ingestion on Startup
 
-4. **GET `/api/v1/health`**
-   - Returns system status and document count
+```python
+num_docs = await doc_processor.load_pdfs_from_directory(settings.PDF_DIRECTORY)
+```
 
-5. **GET `/api/v1/stats`**
-   - Returns collection statistics
+This step:
 
-6. **POST `/api/v1/reset`**
-   - Deletes all documents from vector store
+* Scans the configured data directory
+* Processes **all PDFs synchronously during startup**
+* Blocks server readiness until completion
 
-### 9. **Key Design Choices**
 
-1. **Async/Await Pattern**: All database and LLM calls are async for better concurrency
-2. **No Session Management**: Single global conversation history (suitable for single-user demo)
-3. **Strict Knowledge Grounding**: System prompt explicitly forbids external knowledge
-4. **Dynamic Thresholding**: Adapts similarity requirements based on query characteristics
-5. **Graceful Degradation**: Falls back to "I Don't Know" on insufficient context
-6. **Source Attribution**: Every response includes source documents with page numbers
+---
+
+## 4. Document Processing Pipeline (`document_processor.py`)
+
+### 4.1 PDF Discovery
+
+```python
+pdf_files = list(directory.glob("*.pdf"))
+```
+
+* Only `.pdf` files are supported
+
+---
+
+### 4.2 PDF Loading
+
+```python
+loader = PyPDFLoader(str(pdf_path))
+pages = loader.load()
+```
+
+* Extracts text page-by-page
+* Each page becomes a LangChain `Document`
+* Metadata includes page index
+
+---
+
+### 4.3 Text Chunking Strategy
+
+```python
+RecursiveCharacterTextSplitter(
+    chunk_size=settings.CHUNK_SIZE,
+    chunk_overlap=settings.CHUNK_OVERLAP,
+    separators=["\n\n", "\n", " ", ""]
+)
+```
+
+* Character-based chunking
+* Recursive fallback to smaller separators
+
+
+---
+
+### 4.4 Chunk Deduplication Logic
+
+```python
+chunk_id = md5(f"{filename}_{chunk_index}")
+```
+
+* Deterministic ID per file + chunk index
+* Prevents re-ingesting same PDF **only if chunk order remains identical**
+
+---
+
+### 4.5 Vector Store Ingestion
+
+```python
+self.vector_store.add_documents(
+    documents=documents,
+    metadatas=metadatas,
+    ids=ids
+)
+```
+
+Each chunk stores:
+
+* Text content
+* Metadata:
+
+  * source (filename)
+  * page number
+  * chunk index
+* Vector embedding (generated internally)
+
+📌 Metadata is minimal but sufficient for:
+
+* Source attribution
+* Page-level citations
+
+---
+
+## 5. Database Initialization (`init_db.py`)
+
+```python
+await conn.run_sync(Base.metadata.create_all)
+```
+
+* Uses SQLAlchemy async engine
+* Ensures tables exist
+* No migration/versioning strategy
+
+Assumed use cases:
+
+* Chat history persistence
+* Session memory
+* Feedback tracking (future)
+
+---
+
+## 6. System State After Startup
+
+Once startup completes:
+
+| Component    | Status                      |
+| ------------ | --------------------------- |
+| Vector Store | Initialized & populated     |
+| Embeddings   | Ready for similarity search |
+| Database     | Schema created              |
+| PDFs         | Fully indexed               |
+| API          | Ready to accept queries     |
+
+The system is now capable of:
+
+* Retrieving relevant chunks
+* Answering questions via RAG
+* Falling back to `"I Don't Know"` if context is insufficient (handled later in pipeline)
+
+---
 
