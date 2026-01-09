@@ -1,4 +1,4 @@
-# [ Explore About the project first ](https://github.com/PrakharMasih/Knowledgebase_chatbot/blob/main/about_the_project.md)
+# 📖 [ Explore About the project first ](https://github.com/PrakharMasih/Knowledgebase_chatbot/blob/main/about_the_project.md) 🌟
 
 <img width="1919" height="1079" alt="Screenshot 2026-01-08 124017" src="https://github.com/user-attachments/assets/2b43c88f-9325-4c74-a0f9-e580ffd5accf" />
 
